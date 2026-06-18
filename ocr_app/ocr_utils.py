@@ -11,20 +11,28 @@ except ImportError:
 from PIL import Image, ImageFilter, ImageEnhance
 
 # ── Windows users: uncomment and set your Tesseract path ──────────────────
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
+if pytesseract is not None:
+    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 def preprocess(image_path: str) -> Image.Image:
     """Sharpen + upscale image for better OCR accuracy."""
     img = Image.open(image_path).convert('L')          # grayscale
     img = img.filter(ImageFilter.SHARPEN)
     img = ImageEnhance.Contrast(img).enhance(2.0)
-    img = img.resize((img.width * 2, img.height * 2), Image.LANCZOS)
+    if hasattr(Image, 'Resampling'):
+        resample_filter = Image.Resampling.LANCZOS
+    else:
+        resample_filter = getattr(Image, 'LANCZOS', 1)
+    img = img.resize((img.width * 2, img.height * 2), resample_filter)
     return img
 
 
 def extract_text(image_path: str) -> str:
     """Return raw OCR text from an image file."""
+    if pytesseract is None:
+        raise ImportError('pytesseract is required to extract text from images')
+
     img = preprocess(image_path)
     config = '--oem 3 --psm 6 -l eng'
     return pytesseract.image_to_string(img, config=config)
