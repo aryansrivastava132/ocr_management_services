@@ -1,0 +1,820 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OCR Verify — Barcode Inspection System</title>
+<style>
+/* ── Reset & Tokens ─────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --ink:       #0f1923;
+  --ink-mid:   #374151;
+  --ink-soft:  #6b7280;
+  --surface:   #f5f7fa;
+  --card:      #ffffff;
+  --border:    #e5e7eb;
+  --primary:   #1d4ed8;
+  --primary-d: #1e40af;
+  --pass:      #16a34a;
+  --pass-bg:   #dcfce7;
+  --fail:      #dc2626;
+  --fail-bg:   #fee2e2;
+  --accent:    #f59e0b;
+  --radius:    12px;
+  --shadow:    0 2px 16px rgba(0,0,0,.08);
+  --font-body: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--surface);
+  color: var(--ink);
+  min-height: 100vh;
+}
+
+/* ── Top Nav ─────────────────────────────────────────────────────── */
+.topbar {
+  background: var(--ink);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 56px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0,0,0,.25);
+}
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: .95rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+.topbar-brand .logo-mark {
+  width: 32px; height: 32px;
+  background: var(--primary);
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font-size: 1rem;
+}
+.topbar-status {
+  font-size: .78rem;
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.topbar-status .dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%,100% { opacity:1; }
+  50%      { opacity:.4; }
+}
+
+/* ── Tab Nav ─────────────────────────────────────────────────────── */
+.tab-bar {
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  padding: 0 24px;
+  gap: 4px;
+}
+.tab-btn {
+  padding: 14px 18px;
+  font-size: .875rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color .15s, border-color .15s;
+}
+.tab-btn:hover  { color: var(--primary); }
+.tab-btn.active { color: var(--primary); border-color: var(--primary); }
+
+/* ── Layout ──────────────────────────────────────────────────────── */
+.container { max-width: 860px; margin: 0 auto; padding: 28px 20px 60px; }
+.tab-panel  { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── Cards ───────────────────────────────────────────────────────── */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 28px;
+  margin-bottom: 20px;
+}
+.card-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.card-title .icon { font-size: 1.1rem; }
+
+/* ── Upload Zone ──────────────────────────────────────────────────── */
+.upload-zone {
+  border: 2px dashed #c7d2fe;
+  border-radius: 10px;
+  background: #eef2ff;
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: background .2s, border-color .2s;
+  position: relative;
+}
+.upload-zone:hover, .upload-zone.drag-over {
+  background: #e0e7ff;
+  border-color: var(--primary);
+}
+.upload-zone input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+.upload-icon { font-size: 2.8rem; margin-bottom: 12px; display: block; }
+.upload-zone h3 { font-size: 1rem; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+.upload-zone p  { font-size: .83rem; color: var(--ink-soft); }
+.upload-hint {
+  font-size: .78rem;
+  color: var(--ink-soft);
+  margin-top: 10px;
+}
+
+/* ── Preview ─────────────────────────────────────────────────────── */
+.preview-wrap {
+  display: none;
+  margin-top: 18px;
+  position: relative;
+}
+.preview-wrap img {
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #f8fafc;
+}
+.preview-remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0,0,0,.6);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: .78rem;
+  cursor: pointer;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 11px 22px;
+  border-radius: 8px;
+  font-size: .875rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: background .15s, transform .1s;
+}
+.btn:active { transform: scale(.98); }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-d); }
+.btn-primary:disabled { background: #9ca3af; cursor: not-allowed; transform: none; }
+.btn-outline {
+  background: transparent;
+  color: var(--primary);
+  border: 1.5px solid var(--primary);
+}
+.btn-outline:hover { background: #eef2ff; }
+.btn-ghost {
+  background: transparent;
+  color: var(--ink-soft);
+  border: 1px solid var(--border);
+}
+.btn-ghost:hover { background: var(--surface); }
+
+.btn-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+
+/* ── Spinner ─────────────────────────────────────────────────────── */
+.spinner {
+  display: inline-block;
+  width: 16px; height: 16px;
+  border: 2px solid rgba(255,255,255,.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  vertical-align: middle;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Result Card ─────────────────────────────────────────────────── */
+.result-card {
+  display: none;
+  margin-top: 20px;
+  border-radius: var(--radius);
+  border: 2px solid;
+  overflow: hidden;
+  animation: slideIn .3s ease;
+}
+@keyframes slideIn {
+  from { opacity:0; transform:translateY(8px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+.result-card.pass { border-color: var(--pass); }
+.result-card.fail { border-color: var(--fail); }
+
+.result-header {
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.result-card.pass .result-header { background: var(--pass-bg); }
+.result-card.fail .result-header { background: var(--fail-bg); }
+
+.result-badge {
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: .05em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.result-card.pass .result-badge { color: var(--pass); }
+.result-card.fail .result-badge { color: var(--fail); }
+
+.badge-icon { font-size: 1.6rem; }
+
+.result-body {
+  padding: 18px 20px;
+  background: #fff;
+}
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.field-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.field-label {
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--ink-soft);
+  margin-bottom: 4px;
+}
+.field-value {
+  font-family: var(--font-mono);
+  font-size: .95rem;
+  font-weight: 600;
+  color: var(--ink);
+  word-break: break-all;
+}
+.field-value.empty { color: #d1d5db; font-style: italic; }
+
+.raw-toggle {
+  font-size: .78rem;
+  color: var(--ink-soft);
+  cursor: pointer;
+  text-decoration: underline;
+  background: none;
+  border: none;
+  padding: 0;
+}
+.raw-text {
+  display: none;
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-size: .78rem;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  white-space: pre-wrap;
+  color: var(--ink-mid);
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+/* ── History Table ───────────────────────────────────────────────── */
+.table-wrap { overflow-x: auto; margin-top: 6px; }
+table { width: 100%; border-collapse: collapse; font-size: .83rem; }
+thead th {
+  background: var(--ink);
+  color: #fff;
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: .75rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
+tbody tr:hover { background: #f8fafc; }
+tbody td { padding: 10px 12px; color: var(--ink-mid); vertical-align: middle; }
+tbody td:first-child { font-weight: 600; color: var(--ink); }
+
+.pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: .73rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+.pill-pass { background: var(--pass-bg); color: var(--pass); }
+.pill-fail { background: var(--fail-bg); color: var(--fail); }
+
+.thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 5px; border: 1px solid var(--border); }
+.empty-state {
+  text-align: center;
+  padding: 40px 0;
+  color: var(--ink-soft);
+  font-size: .9rem;
+}
+
+/* ── Date Chart ──────────────────────────────────────────────────── */
+.code-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 20px;
+}
+.form-group label {
+  display: block;
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--ink-mid);
+  margin-bottom: 5px;
+}
+.form-group input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 7px;
+  font-size: .875rem;
+  font-family: inherit;
+  color: var(--ink);
+  outline: none;
+  transition: border-color .15s;
+}
+.form-group input:focus { border-color: var(--primary); }
+
+.delete-btn {
+  background: none;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  font-size: 1.1rem;
+  padding: 4px 8px;
+  border-radius: 5px;
+  transition: background .15s;
+}
+.delete-btn:hover { background: #fee2e2; }
+
+/* ── Toast ───────────────────────────────────────────────────────── */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--ink);
+  color: #fff;
+  padding: 12px 18px;
+  border-radius: 9px;
+  font-size: .875rem;
+  font-weight: 500;
+  box-shadow: 0 4px 20px rgba(0,0,0,.25);
+  z-index: 999;
+  display: none;
+  animation: toastIn .25s ease;
+}
+.toast.show { display: flex; align-items: center; gap: 8px; }
+.toast.success { border-left: 4px solid #22c55e; }
+.toast.error   { border-left: 4px solid #ef4444; }
+@keyframes toastIn {
+  from { transform: translateY(12px); opacity:0; }
+  to   { transform: translateY(0);    opacity:1; }
+}
+
+/* ── Responsive ──────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .field-grid  { grid-template-columns: 1fr 1fr; }
+  .code-form   { grid-template-columns: 1fr 1fr; }
+  .topbar-status { display: none; }
+  .container { padding: 18px 14px 50px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── Top Nav ──────────────────────────────────────────────────────────── -->
+<nav class="topbar">
+  <div class="topbar-brand">
+    <div class="logo-mark">🔍</div>
+    OCR Verify
+  </div>
+  <div class="topbar-status">
+    <span class="dot"></span>
+    System Online
+  </div>
+</nav>
+
+<!-- ── Tab Bar ──────────────────────────────────────────────────────────── -->
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('scan', this)">📷 Scan</button>
+  <button class="tab-btn" onclick="switchTab('history', this)">📋 History</button>
+  <button class="tab-btn" onclick="switchTab('chart', this)">📅 Date Chart</button>
+</div>
+
+<!-- ── Main Content ─────────────────────────────────────────────────────── -->
+<div class="container">
+
+  <!-- ════ TAB: SCAN ════════════════════════════════════════════════════ -->
+  <div class="tab-panel active" id="tab-scan">
+
+    <div class="card">
+      <div class="card-title"><span class="icon">📸</span> Upload Product Photo</div>
+
+      <div class="upload-zone" id="dropZone">
+        <input type="file" id="fileInput" accept="image/*" capture="environment">
+        <span class="upload-icon">🖼️</span>
+        <h3>Drop photo here or click to browse</h3>
+        <p>Supports JPG, PNG, WebP · Max 10 MB</p>
+        <p class="upload-hint">📷 On mobile: tap to open camera</p>
+      </div>
+
+      <div class="preview-wrap" id="previewWrap">
+        <img id="previewImg" src="" alt="Preview">
+        <button class="preview-remove" onclick="clearFile()">✕ Remove</button>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="scanBtn" onclick="doScan()" disabled>
+          🔍 Scan & Verify
+        </button>
+        <button class="btn btn-ghost" onclick="clearFile()">Clear</button>
+      </div>
+    </div>
+
+    <!-- Result -->
+    <div class="result-card" id="resultCard">
+      <div class="result-header">
+        <div class="result-badge">
+          <span class="badge-icon" id="resultIcon"></span>
+          <span id="resultText"></span>
+        </div>
+        <span id="resultTime" style="font-size:.8rem;color:var(--ink-soft)"></span>
+      </div>
+      <div class="result-body">
+        <div class="field-grid">
+          <div class="field-item">
+            <div class="field-label">MFD</div>
+            <div class="field-value" id="fieldMfd">—</div>
+          </div>
+          <div class="field-item">
+            <div class="field-label">EXP</div>
+            <div class="field-value" id="fieldExp">—</div>
+          </div>
+          <div class="field-item">
+            <div class="field-label">Batch No.</div>
+            <div class="field-value" id="fieldBatch">—</div>
+          </div>
+        </div>
+        <button class="raw-toggle" onclick="toggleRaw()">Show raw OCR text ▾</button>
+        <div class="raw-text" id="rawText"></div>
+        <div class="btn-row" style="margin-top:14px">
+          <a href="/api/report/" class="btn btn-outline">⬇ Download Excel Report</a>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /tab-scan -->
+
+  <!-- ════ TAB: HISTORY ════════════════════════════════════════════════ -->
+  <div class="tab-panel" id="tab-history">
+    <div class="card">
+      <div class="card-title" style="justify-content:space-between">
+        <span><span class="icon">📋</span> Scan History</span>
+        <div style="display:flex;gap:8px">
+          <a href="/api/report/" class="btn btn-outline" style="padding:7px 14px;font-size:.8rem">⬇ Export Excel</a>
+          <button class="btn btn-ghost" style="padding:7px 14px;font-size:.8rem" onclick="loadHistory()">↻ Refresh</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Image</th>
+              <th>MFD</th>
+              <th>EXP</th>
+              <th>Batch</th>
+              <th>Result</th>
+              <th>Scanned At</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody">
+            <tr><td colspan="7" class="empty-state">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div><!-- /tab-history -->
+
+  <!-- ════ TAB: DATE CHART ══════════════════════════════════════════════ -->
+  <div class="tab-panel" id="tab-chart">
+    <div class="card">
+      <div class="card-title"><span class="icon">📅</span> Valid Date Codes</div>
+      <p style="font-size:.83rem;color:var(--ink-soft);margin-bottom:18px">
+        Add MFD or EXP codes that should result in <strong>PASS</strong>. If a scanned code matches any entry here, it passes.
+      </p>
+
+      <!-- Add form -->
+      <div class="code-form">
+        <div class="form-group">
+          <label>Code (MFD/EXP)</label>
+          <input type="text" id="inputCode" placeholder="e.g. MFD240101" style="text-transform:uppercase">
+        </div>
+        <div class="form-group">
+          <label>Valid Date</label>
+          <input type="text" id="inputDate" placeholder="e.g. 01-Jan-2024">
+        </div>
+        <div class="form-group">
+          <label>Product Type</label>
+          <input type="text" id="inputProduct" placeholder="e.g. Biscuit">
+        </div>
+        <div>
+          <button class="btn btn-primary" onclick="addCode()">+ Add</button>
+        </div>
+      </div>
+
+      <!-- Codes table -->
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Code</th>
+              <th>Valid Date</th>
+              <th>Product Type</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="chartBody">
+            <tr><td colspan="5" class="empty-state">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div><!-- /tab-chart -->
+
+</div><!-- /container -->
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ── Utilities ───────────────────────────────────────────────────────────── */
+function getCookie(name) {
+  const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+  return v ? v.pop() : '';
+}
+
+function toast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.textContent = (type === 'success' ? '✅ ' : '❌ ') + msg;
+  el.className = `toast show ${type}`;
+  setTimeout(() => el.className = 'toast', 3000);
+}
+
+/* ── Tab switching ───────────────────────────────────────────────────────── */
+function switchTab(id, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  btn.classList.add('active');
+  if (id === 'history') loadHistory();
+  if (id === 'chart')   loadChart();
+}
+
+/* ── File upload & preview ──────────────────────────────────────────────── */
+const fileInput   = document.getElementById('fileInput');
+const previewWrap = document.getElementById('previewWrap');
+const previewImg  = document.getElementById('previewImg');
+const scanBtn     = document.getElementById('scanBtn');
+const dropZone    = document.getElementById('dropZone');
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) showPreview(fileInput.files[0]);
+});
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) {
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    fileInput.files = dt.files;
+    showPreview(file);
+  }
+});
+
+function showPreview(file) {
+  previewImg.src = URL.createObjectURL(file);
+  previewWrap.style.display = 'block';
+  scanBtn.disabled = false;
+  document.getElementById('resultCard').style.display = 'none';
+}
+
+function clearFile() {
+  fileInput.value = '';
+  previewImg.src = '';
+  previewWrap.style.display = 'none';
+  scanBtn.disabled = true;
+  document.getElementById('resultCard').style.display = 'none';
+}
+
+/* ── Scan ───────────────────────────────────────────────────────────────── */
+async function doScan() {
+  if (!fileInput.files[0]) return;
+  scanBtn.disabled = true;
+  scanBtn.innerHTML = '<span class="spinner"></span> Scanning…';
+
+  const fd = new FormData();
+  fd.append('photo', fileInput.files[0]);
+
+  try {
+    const res  = await fetch('/api/scan/', {
+      method : 'POST',
+      headers: { 'X-CSRFToken': getCookie('csrftoken') },
+      body   : fd,
+    });
+    const data = await res.json();
+
+    if (data.error && !data.result) {
+      toast('Scan failed: ' + data.error, 'error');
+      return;
+    }
+
+    const card = document.getElementById('resultCard');
+    card.className  = 'result-card ' + (data.result === 'PASS' ? 'pass' : 'fail');
+    card.style.display = 'block';
+
+    document.getElementById('resultIcon').textContent = data.result === 'PASS' ? '✅' : '❌';
+    document.getElementById('resultText').textContent = data.result === 'PASS' ? 'PASS — Product OK' : 'FAIL — Check Required';
+    document.getElementById('resultTime').textContent = data.scanned_at || '';
+
+    const set = (id, val) => {
+      const el = document.getElementById(id);
+      if (val) { el.textContent = val; el.className = 'field-value'; }
+      else      { el.textContent = 'Not found'; el.className = 'field-value empty'; }
+    };
+    set('fieldMfd',   data.fields?.mfd);
+    set('fieldExp',   data.fields?.exp);
+    set('fieldBatch', data.fields?.batch);
+    document.getElementById('rawText').textContent = data.raw_text || '';
+
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    toast(data.result === 'PASS' ? 'Scan complete — PASS!' : 'Scan complete — FAIL', data.result === 'PASS' ? 'success' : 'error');
+
+  } catch (err) {
+    toast('Network error. Is the server running?', 'error');
+  } finally {
+    scanBtn.disabled = false;
+    scanBtn.innerHTML = '🔍 Scan & Verify';
+  }
+}
+
+function toggleRaw() {
+  const el = document.getElementById('rawText');
+  el.style.display = el.style.display === 'block' ? 'none' : 'block';
+}
+
+/* ── History ────────────────────────────────────────────────────────────── */
+async function loadHistory() {
+  const tbody = document.getElementById('historyBody');
+  tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Loading…</td></tr>';
+  try {
+    const data = await (await fetch('/api/history/')).json();
+    if (!data.scans.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No scans yet. Upload a photo to get started!</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.scans.map(s => `
+      <tr>
+        <td>${s.id}</td>
+        <td>${s.image_url ? `<img src="${s.image_url}" class="thumb" alt="">` : '—'}</td>
+        <td><code>${s.mfd || '—'}</code></td>
+        <td><code>${s.exp || '—'}</code></td>
+        <td><code>${s.batch || '—'}</code></td>
+        <td><span class="pill pill-${s.result.toLowerCase()}">${s.result}</span></td>
+        <td>${s.scanned_at}</td>
+      </tr>`).join('');
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Failed to load history.</td></tr>';
+  }
+}
+
+/* ── Date Chart ─────────────────────────────────────────────────────────── */
+async function loadChart() {
+  const tbody = document.getElementById('chartBody');
+  tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Loading…</td></tr>';
+  try {
+    const data = await (await fetch('/api/datechart/')).json();
+    if (!data.codes.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No codes added yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.codes.map((c, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td><code style="font-weight:700">${c.code}</code></td>
+        <td>${c.valid_date || '—'}</td>
+        <td>${c.product_type || '—'}</td>
+        <td>
+          <button class="delete-btn" onclick="deleteCode(${c.id})" title="Delete">🗑</button>
+        </td>
+      </tr>`).join('');
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Failed to load chart.</td></tr>';
+  }
+}
+
+async function addCode() {
+  const code    = document.getElementById('inputCode').value.trim().toUpperCase();
+  const date    = document.getElementById('inputDate').value.trim();
+  const product = document.getElementById('inputProduct').value.trim();
+  if (!code) { toast('Code is required', 'error'); return; }
+
+  const res = await fetch('/api/datechart/', {
+    method : 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+    body   : JSON.stringify({ code, valid_date: date, product_type: product }),
+  });
+  if (res.ok) {
+    document.getElementById('inputCode').value    = '';
+    document.getElementById('inputDate').value    = '';
+    document.getElementById('inputProduct').value = '';
+    loadChart();
+    toast('Code added!');
+  } else {
+    toast('Failed to add code', 'error');
+  }
+}
+
+async function deleteCode(id) {
+  if (!confirm('Delete this code?')) return;
+  const res = await fetch('/api/datechart/', {
+    method : 'DELETE',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+    body   : JSON.stringify({ id }),
+  });
+  if (res.ok) { loadChart(); toast('Code deleted'); }
+  else         toast('Failed to delete', 'error');
+}
+</script>
+
+</body>
+</html>
