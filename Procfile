@@ -1,1 +1,1 @@
-web: gunicorn ocr_project.wsgi --bind 0.0.0.0:8080
+web: python manage.py migrate && python manage.py collectstatic --no-input && gunicorn ocr_project.wsgi --bind 0.0.0.0:8080
