@@ -1,0 +1,1 @@
+web: python manage.py collectstatic --no-input && gunicorn ocr_project.wsgi --bind 0.0.0.0:$PORT
